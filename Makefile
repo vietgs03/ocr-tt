@@ -6,6 +6,8 @@ setup:
 	@echo "Setup complete."
 
 run:
+	@echo "Opening GUI..."
+	@cmd /c start gui_demo.html
 	@echo "Starting OCR API..."
 	@echo "Setting environment variables..."
 	@set PYTHONIOENCODING=utf-8

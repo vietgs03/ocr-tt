@@ -10,6 +10,8 @@ set PYTHONIOENCODING=utf-8
 set FLAGS_use_mkldnn=0
 
 echo [INFO] Environment variables set.
+echo [INFO] Opening GUI...
+start gui_demo.html
 echo [INFO] Starting API Server...
 echo.
 
