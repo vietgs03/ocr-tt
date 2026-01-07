@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local OCR - Office Edition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .upload-zone {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 60px;
+            text-align: center;
+            background: #f8f9ff;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .upload-zone:hover {
+            background: #eef0ff;
+            border-color: #764ba2;
+        }
+        
+        .upload-zone.drag-over {
+            background: #e0e4ff;
+            border-color: #764ba2;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+        
+        .mode-selector {
+            margin: 30px 0;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        .mode-btn {
+            padding: 15px 30px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .mode-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .result-area {
+            margin-top: 30px;
+            display: none;
+        }
+        
+        .result-area.show {
+            display: block;
+        }
+        
+        .result-box {
+            background: #f8f9ff;
+            border-radius: 15px;
+            padding: 30px;
+            min-height: 300px;
+            position: relative;
+        }
+        
+        .result-text {
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .status.processing {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.cached {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .streaming-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background: #667eea;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #764ba2;
+        }
+        
+        .stats {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e0e4ff;
+            border-radius: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Local OCR Office</h1>
+            <p>AI-Powered Document Recognition | 100% Offline | Self-Learning</p>
+        </div>
+        
+        <div class="content">
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-icon">📄</div>
+                <h2>Kéo thả file vào đây hoặc click để chọn</h2>
+                <p style="margin-top: 10px; color: #666;">Hỗ trợ: JPG, PNG, PDF</p>
+                <input type="file" id="fileInput" accept="image/*,.pdf" style="display: none;">
+            </div>
+            
+            <div class="mode-selector">
+                <button class="mode-btn active" data-mode="fast">⚡ Nhanh (3s)</button>
+                <button class="mode-btn" data-mode="accurate">🎯 Chính xác (3 phút)</button>
+                <button class="mode-btn" data-mode="stream">🌊 Streaming</button>
+            </div>
+            
+            <div class="result-area" id="resultArea">
+                <div class="status" id="status"></div>
+                <div class="result-box">
+                    <div class="result-text" id="resultText"></div>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-primary" onclick="copyResult()">📋 Copy</button>
+                    <button class="btn btn-primary" onclick="downloadResult()">💾 Download</button>
+                </div>
+                <div class="stats" id="stats"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let selectedMode = 'fast';
+        let currentResult = '';
+        
+        // Mode selection
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedMode = btn.dataset.mode;
+            });
+        });
+        
+        // File upload
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+        
+        uploadZone.addEventListener('click', () => fileInput.click());
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('drag-over');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('drag-over');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) processFile(file);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) processFile(file);
+        });
+        
+        async function processFile(file) {
+            const resultArea = document.getElementById('resultArea');
+            const status = document.getElementById('status');
+            const resultText = document.getElementById('resultText');
+            const stats = document.getElementById('stats');
+            
+            resultArea.classList.add('show');
+            resultText.innerHTML = '';
+            currentResult = '';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const startTime = Date.now();
+            
+            if (selectedMode === 'stream') {
+                // Streaming mode
+                status.className = 'status processing';
+                status.innerHTML = '🌊 Streaming... Văn bản đang hiện dần';
+                
+                const eventSource = new EventSource(`${API_BASE}/ocr/stream?mode=accurate`);
+                
+                // Upload file first via separate request
+                fetch(`${API_BASE}/ocr/stream`, {
+                    method: 'POST',
+                    body: formData
+                }).then(response => {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    
+                    function processStream() {
+                        reader.read().then(({done, value}) => {
+                            if (done) {
+                                status.className = 'status success';
+                                status.innerHTML = `✅ Hoàn thành trong ${((Date.now() - startTime) / 1000).toFixed(2)}s`;
+                                return;
+                            }
+                            
+                            const chunk = decoder.decode(value, {stream: true});
+                            const lines = chunk.split('\n');
+                            
+                            lines.forEach(line => {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const data = JSON.parse(line.slice(6));
+                                        if (data.type === 'token') {
+                                            currentResult += data.content;
+                                            resultText.innerHTML = currentResult + '<span class="streaming-cursor"></span>';
+                                        } else if (data.type === 'done') {
+                                            resultText.innerHTML = currentResult;
+                                            status.className = 'status success';
+                                            status.innerHTML = `✅ Hoàn thành trong ${((Date.now() - startTime) / 1000).toFixed(2)}s`;
+                                        }
+                                    } catch (e) {}
+                                }
+                            });
+                            
+                            processStream();
+                        });
+                    }
+                    
+                    processStream();
+                });
+                
+            } else {
+                // Normal modes
+                status.className = 'status processing';
+                status.innerHTML = selectedMode === 'fast' ? '⚡ Đang xử lý (nhanh)...' : '🎯 Đang xử lý (chính xác)...';
+                resultText.innerHTML = '<div class="loader"></div>';
+                
+                try {
+                    const response = await fetch(`${API_BASE}/ocr/${selectedMode}`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+                    
+                    currentResult = result.text;
+                    resultText.innerHTML = currentResult;
+                    
+                    if (result.cached) {
+                        status.className = 'status cached';
+                        status.innerHTML = `⚡ Cache Hit! Instant (${result.duration}s)`;
+                    } else {
+                        status.className = 'status success';
+                        status.innerHTML = `✅ Hoàn thành trong ${duration}s`;
+                    }
+                    
+                    stats.innerHTML = `
+                        📊 Thống kê: ${result.length} ký tự | 
+                        ⏱️ Thời gian: ${result.duration}s | 
+                        🔧 Mode: ${result.mode}
+                    `;
+                    
+                } catch (error) {
+                    status.className = 'status processing';
+                    status.style.background = '#f8d7da';
+                    status.style.color = '#721c24';
+                    status.innerHTML = `❌ Lỗi: ${error.message}`;
+                }
+            }
+        }
+        
+        function copyResult() {
+            navigator.clipboard.writeText(currentResult);
+            alert('✅ Đã copy vào clipboard!');
+        }
+        
+        function downloadResult() {
+            const blob = new Blob([currentResult], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ocr_result_${Date.now()}.txt`;
+            a.click();
+        }
+    </script>
+</body>
+</html>

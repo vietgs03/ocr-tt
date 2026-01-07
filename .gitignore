@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+
+# OCR Cache & Data
+ocr_cache.db
+ocr_cache.db-journal
+learned_vocabulary.json
+vn_dictionary.txt
+
+# Model files (too large)
+*.gguf
+*.bin
+*.pth
+*.safetensors
+
+# Ollama models (user downloads themselves)
+.ollama/
+
+# PaddleOCR cache
+.paddleocr/
+.paddlex/
+
+# Test data
+test_images/
+test_subset/
+data/train_images/
+data/trash_images/
+ocr_results/
+ocr_results_parallel/
+pdf_images/
+
+# Temporary files
+temp_*
+unnamed.jpg
+*.log
+comparison_output.log
+chunked_ocr_result.txt
+ocr_comparison.txt
+
+# PDFs (large)
+*.pdf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
