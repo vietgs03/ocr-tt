@@ -1,5 +1,6 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from starlette.background import BackgroundTask
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import asyncio
@@ -11,6 +12,11 @@ from selflearning_ocr import SelfLearningOCR
 from pdf_extractor import extract_text_from_pdf
 from paddleocr import PaddleOCR
 from symspellpy import SymSpell
+from pdf2docx import Converter
+from docx import Document
+from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from tempfile import NamedTemporaryFile
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -29,12 +35,12 @@ app.add_middleware(
 # Initialize OCR engines
 print("🚀 Initializing OCR engines...")
 deepseek_ocr = SelfLearningOCR(keep_alive="60m")
-paddle_ocr = PaddleOCR(use_angle_cls=False, lang='vi', use_gpu=False, show_log=False)
+paddle_ocr = PaddleOCR(use_angle_cls=False, lang='vi', use_gpu=False, show_log=False, enable_mkldnn=False)
 sym_spell = SymSpell(max_dictionary_edit_distance=2, prefix_length=7)
 
 # Load dictionary for fast mode
 if os.path.exists('vn_dictionary.txt'):
-    sym_spell.load_dictionary('vn_dictionary.txt', term_index=0, count_index=1, separator=" ")
+    sym_spell.load_dictionary('vn_dictionary.txt', term_index=0, count_index=1, separator=" ", encoding="utf-8")
     print("✅ Dictionary loaded for Fast Mode")
 
 print("✅ API Ready!")
@@ -295,6 +301,93 @@ async def learn_vocabulary(wrong: str, correct: str):
 async def cache_stats():
     """Get cache statistics"""
     return deepseek_ocr.get_cache_stats()
+
+@app.post("/export/docx")
+async def export_docx(text: str = Form(...)):
+    """Export text to Word document"""
+    try:
+        # Create document
+        doc = Document()
+        
+        # Set default style to Times New Roman
+        style = doc.styles['Normal']
+        font = style.font
+        font.name = 'Times New Roman'
+        font.size = Pt(13)
+        
+        # Add paragraphs (preserving line breaks)
+        for line in text.split('\n'):
+            p = doc.add_paragraph(line)
+            p.paragraph_format.space_after = Pt(0)
+            
+        # Save to temp file
+        with NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+            doc.save(tmp.name)
+            tmp_path = tmp.name
+            
+        return FileResponse(
+            tmp_path, 
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+            filename="ocr_result.docx",
+            background=BackgroundTask(os.remove, tmp_path)
+        )
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/convert/pdf-doc")
+async def convert_pdf_doc(file: UploadFile = File(...)):
+    """Convert PDF to Word preserving layout"""
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+        
+    try:
+        # Save temp PDF
+        with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
+            tmp_pdf.write(await file.read())
+            pdf_path = tmp_pdf.name
+            
+        # Define temp Docx path
+        docx_path = pdf_path.replace(".pdf", ".docx")
+        
+        # Convert using pdf2docx
+        cv = Converter(pdf_path)
+        cv.convert(docx_path, start=0, end=None)
+        cv.close()
+        
+        # Post-process to force Times New Roman
+        doc = Document(docx_path)
+        # Iterate over all paragraphs
+        for paragraph in doc.paragraphs:
+            for run in paragraph.runs:
+                run.font.name = 'Times New Roman'
+                run.font.size = Pt(13)
+        
+        # Iterate over tables
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            run.font.name = 'Times New Roman'
+                            run.font.size = Pt(13)
+                            
+        doc.save(docx_path)
+        
+        # Cleanup PDF
+        os.remove(pdf_path)
+        
+        return FileResponse(
+            docx_path, 
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+            filename="converted_layout.docx",
+            background=BackgroundTask(os.remove, docx_path)
+        )
+            
+    except Exception as e:
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/cache/clear")
 async def clear_cache():

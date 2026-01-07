@@ -8,6 +8,7 @@ import sqlite3
 from PIL import Image
 import io
 from pathlib import Path
+import fitz  # PyMuPDF
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
@@ -172,24 +173,62 @@ class SelfLearningOCR:
                 return cached
         
         # Step 2: OCR Processing
+        # Step 2: OCR Processing (Multi-page PDF Support)
         logging.info(f"📸 Processing: {image_path}")
         try:
-            with open(image_path, 'rb') as f:
-                img_data = f.read()
+            full_text = []
             
-            response = self.client.chat(
-                model=self.model_name,
-                messages=[{
-                    'role': 'user',
-                    'content': prompt,
-                    'images': [img_data]
-                }],
-                options={'temperature': 0.0},
-                keep_alive=self.keep_alive
-            )
+            # Handle PDF - Process ALL pages
+            if str(image_path).lower().endswith('.pdf'):
+                doc = fitz.open(image_path)
+                total_pages = len(doc)
+                
+                if total_pages == 0:
+                    return "❌ Empty PDF"
+                
+                logging.info(f"📄 PDF has {total_pages} pages. Processing sequentially...")
+                
+                for i, page in enumerate(doc):
+                    logging.info(f"   - Processing page {i+1}/{total_pages}...")
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                    img_data = pix.tobytes("png")
+                    
+                    response = self.client.chat(
+                        model=self.model_name,
+                        messages=[{
+                            'role': 'user',
+                            'content': prompt + f" (Page {i+1})",
+                            'images': [img_data]
+                        }],
+                        options={'temperature': 0.0},
+                        keep_alive=self.keep_alive
+                    )
+                    
+                    page_text = response['message']['content']
+                    page_text = self.parse_grounding_output(page_text)
+                    full_text.append(f"--- PAGE {i+1} ---\n{page_text}")
+                
+                doc.close()
+                ocr_result = "\n\n".join(full_text)
+                
+            else:
+                # Handle Single Image
+                with open(image_path, 'rb') as f:
+                    img_data = f.read()
             
-            ocr_result = response['message']['content']
-            ocr_result = self.parse_grounding_output(ocr_result)
+                response = self.client.chat(
+                    model=self.model_name,
+                    messages=[{
+                        'role': 'user',
+                        'content': prompt,
+                        'images': [img_data]
+                    }],
+                    options={'temperature': 0.0},
+                    keep_alive=self.keep_alive
+                )
+                
+                ocr_result = response['message']['content']
+                ocr_result = self.parse_grounding_output(ocr_result)
             
             # Step 3: Apply vocabulary corrections
             corrected_result = self._apply_vocabulary_corrections(ocr_result)

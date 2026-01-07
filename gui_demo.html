@@ -123,9 +123,10 @@
 
         .result-text {
             white-space: pre-wrap;
-            font-family: 'Courier New', monospace;
-            font-size: 0.95em;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 1.1em;
             line-height: 1.6;
+            color: #333;
         }
 
         .status {
@@ -135,9 +136,39 @@
             font-weight: bold;
         }
 
-        .status.processing {
-            background: #fff3cd;
-            color: #856404;
+        .result-container {
+            position: relative;
+        }
+
+        .page-marker {
+            display: none;
+            color: #999;
+            font-size: 0.8em;
+            border-bottom: 1px dashed #ccc;
+            text-align: center;
+            margin: 10px 0;
+            padding: 5px;
+        }
+
+        .actions {
+            position: sticky;
+            top: 20px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+            backdrop-filter: blur(5px);
+            border: 1px solid #eee;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
         }
 
         .status.success {
@@ -250,12 +281,14 @@
 
             <div class="result-area" id="resultArea">
                 <div class="status" id="status"></div>
-                <div class="result-box">
-                    <div class="result-text" id="resultText"></div>
-                </div>
-                <div class="actions">
-                    <button class="btn btn-primary" onclick="copyResult()">📋 Copy</button>
-                    <button class="btn btn-primary" onclick="downloadResult()">💾 Download</button>
+                <div class="result-container">
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="copyResult()">📋 Copy</button>
+                        <button class="btn btn-primary" onclick="downloadWord()">💾 Download Word</button>
+                    </div>
+                    <div class="result-box">
+                        <div class="result-text" id="resultText"></div>
+                    </div>
                 </div>
                 <div class="stats" id="stats"></div>
             </div>
@@ -388,6 +421,11 @@
                     });
 
                     const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.detail || "Server error");
+                    }
+
                     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
                     currentResult = result.text;
@@ -407,6 +445,11 @@
                         🔧 Mode: ${result.mode}
                     `;
 
+                    // Hidden View: Wrap page markers
+                    const formattedResult = result.text.replace(/(-{3} PAGE \d+ -{3})/g, '<div class="page-marker">$1</div>');
+                    resultText.innerHTML = formattedResult;
+
+
                 } catch (error) {
                     status.className = 'status processing';
                     status.style.background = '#f8d7da';
@@ -421,13 +464,44 @@
             alert('✅ Đã copy vào clipboard!');
         }
 
-        function downloadResult() {
-            const blob = new Blob([currentResult], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `ocr_result_${Date.now()}.txt`;
-            a.click();
+        async function downloadWord() {
+            const btn = document.querySelector('button[onclick="downloadWord()"]');
+            const originalText = btn.innerText;
+            btn.innerText = '⏳ Generating...';
+            btn.disabled = true;
+
+            try {
+                if (!currentResult) return;
+
+                // Always use simple text export (User requested "dump data", no design)
+                const formData = new FormData();
+                formData.append('text', currentResult);
+
+                const response = await fetch(`${API_BASE}/export/docx`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Export failed');
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ocr_result_${Date.now()}.docx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (e) {
+                alert('❌ Lỗi export Word: ' + e.message);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
         }
     </script>
 </body>
