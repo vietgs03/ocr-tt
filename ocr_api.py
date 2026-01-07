@@ -8,6 +8,7 @@ import time
 import os
 from pathlib import Path
 from selflearning_ocr import SelfLearningOCR
+from pdf_extractor import extract_text_from_pdf
 from paddleocr import PaddleOCR
 from symspellpy import SymSpell
 import logging
@@ -134,6 +135,42 @@ async def ocr_accurate(file: UploadFile = File(...)):
             "duration": round(duration, 2),
             "length": len(ocr_text),
             "cached": duration < 1.0  # If < 1s, was cached
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/ocr/pdf-text")
+async def ocr_pdf_text(file: UploadFile = File(...)):
+    """
+    PDF Text Mode: Direct text extraction (No OCR)
+    - Speed: Near-instant
+    - Accuracy: 100% (of text layer)
+    - Use for: Searchable PDFs, digital documents
+    """
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported for this mode")
+        
+    try:
+        # Save temp file
+        temp_path = f"temp_{file.filename}"
+        with open(temp_path, "wb") as f:
+            f.write(await file.read())
+            
+        start = time.time()
+        
+        # Direct extraction
+        text = extract_text_from_pdf(temp_path)
+        duration = time.time() - start
+        
+        # Cleanup
+        os.remove(temp_path)
+        
+        return {
+            "mode": "pdf_text",
+            "text": text,
+            "duration": round(duration, 2),
+            "length": len(text)
         }
         
     except Exception as e:

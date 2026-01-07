@@ -2,6 +2,36 @@ import fitz  # PyMuPDF
 import os
 from pathlib import Path
 
+def extract_text_from_pdf(pdf_path):
+    """
+    Extract text directly from the PDF's text layer (no OCR)
+    
+    Args:
+        pdf_path: Path to PDF file
+        
+    Returns:
+        String containing extracted text
+    """
+    if not os.path.exists(pdf_path):
+        return f"⚠️ File not found: {pdf_path}"
+        
+    try:
+        doc = fitz.open(pdf_path)
+        full_text = []
+        
+        print(f"📄 Extracting text from: {pdf_path}")
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            text = page.get_text()
+            full_text.append(f"--- PAGE {page_num + 1} ---\n{text}")
+            
+        doc.close()
+        return "\n\n".join(full_text)
+        
+    except Exception as e:
+        return f"❌ Error extracting text: {e}"
+
 def pdf_to_images(pdf_path, output_folder="pdf_images", dpi=150):
     """
     Extract all pages from PDF as images
