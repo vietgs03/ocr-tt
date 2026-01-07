@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-multipart
+paddlepaddle
+paddleocr
+ollama
+symspellpy
+Pillow
+python-docx
+pdf2docx
+pymupdf
+numpy<2
